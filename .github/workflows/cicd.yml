@@ -62,16 +62,13 @@ jobs:
           IMAGE_TAG: ${{ github.run_number }}
           EC2_USER: ec2-user
           EC2_HOST: ${{ secrets.EC2_HOST }}
-          SSH_KEY: ${{ secrets.EC2_SSH_KEY }}   
-          
+      
         run: |
-          echo "${{ env.SSH_KEY }}" > medicare-key.pem
-          chmod 600 medicare-key.pem
-          
-          # Start SSH agent and add key
+          # Start SSH agent and add key from secret
           eval "$(ssh-agent -s)"
-          ssh-add medicare-key.pem
+          echo "${{ secrets.EC2_SSH_KEY }}" | ssh-add -
           
+          # Deploy using SSH agent
           ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST "
             aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
             docker pull $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
@@ -79,3 +76,6 @@ jobs:
             docker rm mediplus || true
             docker run -d --name mediplus -p 80:80 $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           "
+          
+          # Kill the SSH agent when done
+          eval "$(ssh-agent -k)"
