@@ -67,9 +67,13 @@ jobs:
         run: |
           echo "${{ secrets.EC2_SSH_KEY }}" > private_key.pem
           chmod 600 private_key.pem
-          cat private_key.pem
-
-          ssh -o StrictHostKeyChecking=no -i private_key.pem $EC2_USER@$EC2_HOST "
+          
+          # Start SSH agent and add key
+          eval "$(ssh-agent -s)"
+          ssh-add private_key.pem
+          
+          ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST "
+            aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
             docker pull $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
             docker stop mediplus || true
             docker rm mediplus || true
