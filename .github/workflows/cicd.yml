@@ -7,7 +7,7 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  AWS_ACCOUNT_ID: <your-account-id>
+  AWS_ACCOUNT_ID: 657103446220
 
 jobs:
   build:
@@ -65,7 +65,7 @@ jobs:
           SSH_KEY: ${{ secrets.EC2_SSH_KEY }}   
           
         run: |
-          echo "${{ secrets.SSH_KEY }}" > private_key.pem
+          echo "${{ secrets.EC2_SSH_KEY }}" > private_key.pem
           chmod 600 private_key.pem
           cat private_key.pem
 
