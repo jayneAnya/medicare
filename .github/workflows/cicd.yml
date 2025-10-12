@@ -31,16 +31,16 @@ jobs:
     runs-on: ubuntu-latest
     needs: build-push
     steps:
-    - name: SSH and deploy to EC2
+    - name: Deploy to EC2
       run: |
         echo "${{ secrets.EC2_SSH_KEY }}" > mykey.pem
         chmod 600 mykey.pem
         
-        ssh -o StrictHostKeyChecking=no -i mykey.pem ubuntu@${{ secrets.EC2_HOST }} \
-          "docker pull 657103446220.dkr.ecr.us-east-1.amazonaws.com/mediplus:${{ github.run_number }}"
-
-        ssh -o StrictHostKeyChecking=no -i mykey.pem ubuntu@${{ secrets.EC2_HOST }} \
-          "docker rm -f mediplus || true"
-
-        ssh -o StrictHostKeyChecking=no -i mykey.pem ubuntu@${{ secrets.EC2_HOST }} \
-          "docker run -d --name mediplus -p 80:80 657103446220.dkr.ecr.us-east-1.amazonaws.com/mediplus:${{ github.run_number }}"
+        ssh -o StrictHostKeyChecking=no -i mykey.pem ubuntu@${{ secrets.EC2_HOST }} << 'EOF'
+          # ECR login should work with EC2's built-in IAM role
+          aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 657103446220.dkr.ecr.us-east-1.amazonaws.com
+          
+          docker pull 657103446220.dkr.ecr.us-east-1.amazonaws.com/mediplus:${{ github.run_number }}
+          docker rm -f mediplus || true
+          docker run -d --name mediplus -p 80:80 657103446220.dkr.ecr.us-east-1.amazonaws.com/mediplus:${{ github.run_number }}
+        EOF
