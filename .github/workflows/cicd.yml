@@ -1,80 +1,44 @@
-name: Build and Push Docker Image To ECR. Deploy to EC2 Instance
+name: Build and push docker image to ECR
+
 on:
   push:
-    branches:
-      - main
-  workflow_dispatch:
-
-env:
-  AWS_REGION: us-east-1
-  AWS_ACCOUNT_ID: 657103446220
 
 jobs:
-  build:
-    name: Build and Push Docker Image To ECR
+  build-push:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+        - name: Checkout code
+          uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
-        run: |
+        - name: Configure AWS credentials
+          run: |
             aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
             aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-            aws configure set default.region ${{ env.AWS_REGION }}
+            aws configure set default.region ${{ secrets.AWS_REGION }}
 
-      - name: Login to Amazon ECR
-        run: |
-            aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
+        - name: Login to Amazon ECR
+          run: |
+           aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 657103446220.dkr.ecr.us-east-1.amazonaws.com
+        
+        - name: Build and push Docker image to ECR
+          run: |
+            docker build -t mediplus:${{ github.run_number }} .
+            docker tag mediplus:${{ github.run_number }} 657103446220.dkr.ecr.us-east-1.amazonaws.com/mediplus:${{ github.run_number }}
+            docker push 657103446220.dkr.ecr.us-east-1.amazonaws.com/mediplus:${{ github.run_number }}
 
-      - name: Build, tag, and push image to Amazon ECR
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: mediplus
-          IMAGE_TAG: ${{ github.run_number }}
-        run: |
-          docker build -t $ECR_REPOSITORY:$IMAGE_TAG .
-          docker tag $ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
   deploy:
-    name: Deploy to EC2 Instance
     runs-on: ubuntu-latest
-    needs: build
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Deploy to EC2 Instance
-        env:
-          ECR_REGISTRY: ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
-          ECR_REPOSITORY: mediplus
-          IMAGE_TAG: ${{ github.run_number }}
-          EC2_USER: ubuntu
-          EC2_HOST: ${{ secrets.EC2_HOST }}
-      
+    needs: build-push
+    steps: 
+      - name: check my ssh key
         run: |
-          # Start SSH agent and add key from secret
-          eval "$(ssh-agent -s)"
-          echo "${{ secrets.EC2_SSH_KEY }}" | ssh-add -
-          
-          # Deploy using SSH agent
-          ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST "
-            aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
-            docker pull $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-            docker stop mediplus || true
-            docker rm mediplus || true
-            docker run -d --name mediplus -p 80:80 $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          "
-          
-          # Kill the SSH agent when done
-          eval "$(ssh-agent -k)"
+          echo "${{ secrets.EC2_SSH_KEY }}" > mykey.pem
+          chmod 600 mykey.pem
+          cat mykey.pem
+
+          ssh -o StrictHostKeyChecking=no -i mykey.pem ubuntu@34.229.86.229 "docker pull 657103446220.dkr.ecr.us-east-1.amazonaws.com/mediplus:{{ github.run_number }}"
+
+                    ssh -o StrictHostKeyChecking=no -i mykey.pem ubuntu@{{ secrets.EC2_HOST }} "docker rm -f mediplus"
+
+          ssh -o StrictHostKeyChecking=no -i mykey.pem ubuntu@{{ secrets.EC2_HOST }} "docker run -d --name mediplus -p 80:80 657103446220.dkr.ecr.us-east-1.amazonaws.com/mediplus:{{ github.run_number }}"
