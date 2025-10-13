@@ -20,12 +20,24 @@ jobs:
           run: |
            aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 657103446220.dkr.ecr.us-east-1.amazonaws.com
         
-        - name: Build and push Docker image to ECR
+        - name: Build Docker image
           run: |
-            docker build -t mediplus:${{ github.run_number }} .
-            docker tag mediplus:${{ github.run_number }} 657103446220.dkr.ecr.us-east-1.amazonaws.com/mediplus:${{ github.run_number }}
-            docker push 657103446220.dkr.ecr.us-east-1.amazonaws.com/mediplus:${{ github.run_number }}
+           docker build -t mediplus:${{ github.run_number }} .
+           docker tag mediplus:${{ github.run_number }} 657103446220.dkr.ecr.us-east-1.amazonaws.com/mediplus:${{ github.run_number }}
 
+        - name: Scan image with Trivy (before push)
+          uses: aquasecurity/trivy-action@0.12.0
+          with:
+            image-ref: mediplus:${{ github.run_number }}
+            format: 'table'
+            exit-code: '1'
+            ignore-unfixed: true
+            severity: 'HIGH,CRITICAL'
+
+        - name: Push Docker image to ECR
+          if: success()
+          run: |
+           docker push 657103446220.dkr.ecr.us-east-1.amazonaws.com/mediplus:${{ github.run_number }}
 
   deploy:
     runs-on: ubuntu-latest
