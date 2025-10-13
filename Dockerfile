@@ -1,5 +1,5 @@
 # get a base image for docker hub
-FROM nginx:latest
+FROM nginx:alpine
 
 RUN rm -rf /usr/share/nginx/html/*
 
